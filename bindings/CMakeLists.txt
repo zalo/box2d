@@ -14,10 +14,11 @@ if(EMSCRIPTEN)
         ${CMAKE_SOURCE_DIR}/src
     )
     
-    # Emscripten-specific settings
+    # Emscripten-specific settings - disable threading for web bindings
     set_target_properties(box2d_bindings PROPERTIES
         SUFFIX ".js"
-        LINK_FLAGS "--bind -s MODULARIZE=1 -s EXPORT_NAME='Box2D' -s ENVIRONMENT=web -s ALLOW_MEMORY_GROWTH=1 -s ASSERTIONS=1 -O3 -s EXPORTED_RUNTIME_METHODS=['FS']"
+        LINK_FLAGS "--bind -s MODULARIZE=1 -s EXPORT_NAME='Box2D' -s ENVIRONMENT=web -s ALLOW_MEMORY_GROWTH=1 -s ASSERTIONS=1 -O3 -s EXPORTED_RUNTIME_METHODS=['FS'] -s USE_PTHREADS=0"
+        COMPILE_FLAGS "-s USE_PTHREADS=0"
     )
     
     # Generate TypeScript definitions

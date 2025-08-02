@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Box2D.js Physics Playground</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        
+        #container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        canvas {
+            border: 2px solid #333;
+            display: block;
+            margin: 20px auto;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98D8E8 100%);
+            cursor: crosshair;
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        button.active {
+            background: #2196F3;
+        }
+        
+        .tool-section {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #f9f9f9;
+        }
+        
+        .tool-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 15px 0;
+            font-size: 14px;
+            color: #666;
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        .slider-container {
+            margin: 10px 0;
+        }
+        
+        .slider-container label {
+            display: inline-block;
+            width: 120px;
+            font-size: 14px;
+        }
+        
+        input[type="range"] {
+            width: 150px;
+        }
+        
+        #info {
+            text-align: center;
+            color: #666;
+            margin-top: 20px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>Box2D.js Interactive Physics Playground</h1>
+        <p>Click and drag to create physics objects. Experiment with different shapes, joints, and properties!</p>
+        
+        <canvas id="canvas" width="800" height="600"></canvas>
+        
+        <div class="tool-section">
+            <div class="tool-title">Shape Tools</div>
+            <div class="controls">
+                <button id="boxMode" onclick="setMode('box')" class="active">Box</button>
+                <button id="circleMode" onclick="setMode('circle')">Circle</button>
+                <button id="capsuleMode" onclick="setMode('capsule')">Capsule</button>
+                <button id="polygonMode" onclick="setMode('polygon')">Pentagon</button>
+            </div>
+        </div>
+        
+        <div class="tool-section">
+            <div class="tool-title">Joint Tools</div>
+            <div class="controls">
+                <button onclick="setMode('distance')">Distance Joint</button>
+                <button onclick="setMode('revolute')">Revolute Joint</button>
+                <button onclick="setMode('weld')">Weld Joint</button>
+                <button onclick="setMode('mouse')">Mouse Joint</button>
+            </div>
+        </div>
+        
+        <div class="tool-section">
+            <div class="tool-title">Special Tools</div>
+            <div class="controls">
+                <button onclick="setMode('raycast')">Ray Cast</button>
+                <button onclick="toggleGravity()">Toggle Gravity</button>
+                <button onclick="applyExplosion()">Explosion</button>
+                <button onclick="reset()">Reset All</button>
+            </div>
+        </div>
+        
+        <div class="tool-section">
+            <div class="tool-title">Properties</div>
+            <div class="slider-container">
+                <label>Density:</label>
+                <input type="range" id="densitySlider" min="0.1" max="5" step="0.1" value="1" />
+                <span id="densityValue">1.0</span>
+            </div>
+            <div class="slider-container">
+                <label>Friction:</label>
+                <input type="range" id="frictionSlider" min="0" max="1" step="0.1" value="0.3" />
+                <span id="frictionValue">0.3</span>
+            </div>
+            <div class="slider-container">
+                <label>Restitution:</label>
+                <input type="range" id="restitutionSlider" min="0" max="1" step="0.1" value="0.2" />
+                <span id="restitutionValue">0.2</span>
+            </div>
+        </div>
+        
+        <div class="stats">
+            <div>Bodies: <span id="bodyCount">0</span></div>
+            <div>Joints: <span id="jointCount">0</span></div>
+            <div>Mode: <span id="currentMode">box</span></div>
+            <div>FPS: <span id="fps">0</span></div>
+            <div>Gravity: <span id="gravityStatus">ON</span></div>
+        </div>
+        
+        <div id="info">
+            Loading Box2D Physics Engine...
+        </div>
+    </div>
+
+    <script src="./box2d_bindings.js"></script>
+    <script>
+        let box2d, world;
+        let bodies = [], joints = [];
+        let canvas, ctx;
+        let currentMode = 'box';
+        let lastTime = 0, frameCount = 0, lastFpsUpdate = 0;
+        
+        // Interaction state
+        let isMouseDown = false;
+        let mouseStart = null;
+        let mouseJoint = null;
+        let selectedBody = null;
+        
+        // Physics settings
+        let density = 1.0, friction = 0.3, restitution = 0.2;
+        let gravityEnabled = true;
+        
+        // Canvas setup
+        canvas = document.getElementById('canvas');
+        ctx = canvas.getContext('2d');
+        
+        const SCALE = 30;
+        const WORLD_WIDTH = canvas.width / SCALE;
+        const WORLD_HEIGHT = canvas.height / SCALE;
+        
+        const objectShapes = new Map();
+        const rayResults = [];
+        
+        // Set up sliders
+        document.getElementById('densitySlider').oninput = function() {
+            density = parseFloat(this.value);
+            document.getElementById('densityValue').textContent = density.toFixed(1);
+        };
+        
+        document.getElementById('frictionSlider').oninput = function() {
+            friction = parseFloat(this.value);
+            document.getElementById('frictionValue').textContent = friction.toFixed(1);
+        };
+        
+        document.getElementById('restitutionSlider').oninput = function() {
+            restitution = parseFloat(this.value);
+            document.getElementById('restitutionValue').textContent = restitution.toFixed(1);
+        };
+        
+        // Mouse event handlers
+        canvas.addEventListener('mousedown', handleMouseDown);
+        canvas.addEventListener('mousemove', handleMouseMove);
+        canvas.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('click', handleCanvasClick);
+        
+        function handleMouseDown(event) {
+            if (!world) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = (event.clientX - rect.left) / SCALE;
+            const y = (event.clientY - rect.top) / SCALE;
+            
+            isMouseDown = true;
+            mouseStart = {x, y};
+            
+            if (currentMode === 'mouse') {
+                // Find body at mouse position and create mouse joint
+                const bodyAtPoint = findBodyAtPoint(x, y);
+                if (bodyAtPoint && bodyAtPoint.getType() === box2d.BodyType.dynamicBody) {
+                    selectedBody = bodyAtPoint;
+                    mouseJoint = new box2d.MouseJoint(world, bodyAtPoint, x, y);
+                    joints.push(mouseJoint);
+                }
+            }
+        }
+        
+        function handleMouseMove(event) {
+            if (!world || !isMouseDown) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = (event.clientX - rect.left) / SCALE;
+            const y = (event.clientY - rect.top) / SCALE;
+            
+            if (mouseJoint) {
+                mouseJoint.setTarget(x, y);
+            }
+        }
+        
+        function handleMouseUp(event) {
+            isMouseDown = false;
+            
+            if (mouseJoint) {
+                mouseJoint = null;
+                selectedBody = null;
+            }
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = (event.clientX - rect.left) / SCALE;
+            const y = (event.clientY - rect.top) / SCALE;
+            
+            if (mouseStart && currentMode === 'raycast') {
+                // Cast ray from start to end
+                const result = world.castRayClosest(mouseStart.x, mouseStart.y, x - mouseStart.x, y - mouseStart.y);
+                rayResults.push({
+                    origin: mouseStart,
+                    direction: {x: x - mouseStart.x, y: y - mouseStart.y},
+                    result: result,
+                    time: Date.now()
+                });
+            }
+            
+            mouseStart = null;
+        }
+        
+        function handleCanvasClick(event) {
+            if (!world || currentMode === 'mouse' || currentMode === 'raycast') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = (event.clientX - rect.left) / SCALE;
+            const y = (event.clientY - rect.top) / SCALE;
+            
+            if (['box', 'circle', 'capsule', 'polygon'].includes(currentMode)) {
+                createShape(x, y, currentMode);
+            } else if (currentMode.includes('joint')) {
+                createJoint(x, y, currentMode);
+            }
+        }
+        
+        function findBodyAtPoint(x, y) {
+            // Simple point-in-body test (approximation)
+            for (let body of bodies) {
+                if (!body.isValid()) continue;
+                
+                const pos = body.getPosition();
+                const shape = objectShapes.get(body);
+                if (!shape) continue;
+                
+                const dx = x - pos.x;
+                const dy = y - pos.y;
+                
+                if (shape.type === 'circle') {
+                    if (dx * dx + dy * dy <= shape.size.r * shape.size.r) {
+                        return body;
+                    }
+                } else if (shape.type === 'box') {
+                    if (Math.abs(dx) <= shape.size.w / 2 && Math.abs(dy) <= shape.size.h / 2) {
+                        return body;
+                    }
+                }
+            }
+            return null;
+        }
+        
+        function createShape(x, y, shapeType) {
+            const body = new box2d.Body(world, x, y, box2d.BodyType.dynamicBody);
+            const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            
+            switch (shapeType) {
+                case 'box':
+                    const size = 0.3 + Math.random() * 0.5;
+                    box2d.ShapeFactory.createBox(body, size, size, density, friction);
+                    objectShapes.set(body, {type: 'box', size: {w: size * 2, h: size * 2}, color});
+                    break;
+                    
+                case 'circle':
+                    const radius = 0.2 + Math.random() * 0.4;
+                    box2d.ShapeFactory.createCircle(body, radius, density, friction);
+                    objectShapes.set(body, {type: 'circle', size: {r: radius}, color});
+                    break;
+                    
+                case 'capsule':
+                    const height = 0.8 + Math.random() * 0.8;
+                    const capRadius = 0.2 + Math.random() * 0.2;
+                    box2d.ShapeFactory.createCapsule(body, height, capRadius, density, friction);
+                    objectShapes.set(body, {type: 'capsule', size: {h: height, r: capRadius}, color});
+                    break;
+                    
+                case 'polygon':
+                    const points = [];
+                    const polyRadius = 0.4 + Math.random() * 0.3;
+                    for (let i = 0; i < 5; i++) {
+                        const angle = (i / 5) * 2 * Math.PI;
+                        points.push({
+                            x: Math.cos(angle) * polyRadius,
+                            y: Math.sin(angle) * polyRadius
+                        });
+                    }
+                    box2d.ShapeFactory.createPolygon(body, points, density, friction);
+                    objectShapes.set(body, {type: 'polygon', size: {points}, color});
+                    break;
+            }
+            
+            bodies.push(body);
+        }
+        
+        function createJoint(x, y, jointType) {
+            // Find the two closest bodies for joint creation
+            const nearbyBodies = bodies.filter(body => {
+                if (!body.isValid() || body.getType() !== box2d.BodyType.dynamicBody) return false;
+                const pos = body.getPosition();
+                const dist = Math.sqrt((pos.x - x) * (pos.x - x) + (pos.y - y) * (pos.y - y));
+                return dist < 3; // Within 3 units
+            }).sort((a, b) => {
+                const posA = a.getPosition();
+                const posB = b.getPosition();
+                const distA = Math.sqrt((posA.x - x) * (posA.x - x) + (posA.y - y) * (posA.y - y));
+                const distB = Math.sqrt((posB.x - x) * (posB.x - x) + (posB.y - y) * (posB.y - y));
+                return distA - distB;
+            });
+            
+            if (nearbyBodies.length < 2) {
+                console.log('Need at least 2 nearby bodies to create a joint');
+                return;
+            }
+            
+            const bodyA = nearbyBodies[0];
+            const bodyB = nearbyBodies[1];
+            let joint;
+            
+            switch (jointType) {
+                case 'distance':
+                    joint = new box2d.DistanceJoint(world, bodyA, bodyB, 0, 0, 0, 0);
+                    break;
+                case 'revolute':
+                    joint = new box2d.RevoluteJoint(world, bodyA, bodyB, 0, 0);
+                    break;
+                case 'weld':
+                    joint = new box2d.WeldJoint(world, bodyA, bodyB, 0, 0);
+                    break;
+            }
+            
+            if (joint) {
+                joints.push(joint);
+                console.log(`Created ${jointType} joint between two bodies`);
+            }
+        }
+        
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById('currentMode').textContent = mode;
+            
+            // Update button states
+            document.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+            if (document.getElementById(mode + 'Mode')) {
+                document.getElementById(mode + 'Mode').classList.add('active');
+            }
+        }
+        
+        function toggleGravity() {
+            gravityEnabled = !gravityEnabled;
+            world.setGravity(0, gravityEnabled ? 10 : 0);
+            document.getElementById('gravityStatus').textContent = gravityEnabled ? 'ON' : 'OFF';
+        }
+        
+        function applyExplosion() {
+            const centerX = WORLD_WIDTH / 2;
+            const centerY = WORLD_HEIGHT / 2;
+            const explosionForce = 50;
+            
+            bodies.forEach(body => {
+                if (body.getType() !== box2d.BodyType.dynamicBody) return;
+                
+                const pos = body.getPosition();
+                const dx = pos.x - centerX;
+                const dy = pos.y - centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < 8 && distance > 0) {
+                    const force = explosionForce / (distance * distance);
+                    const forceX = (dx / distance) * force;
+                    const forceY = (dy / distance) * force;
+                    
+                    body.applyImpulse(forceX, forceY, pos.x, pos.y);
+                }
+            });
+        }
+        
+        async function init() {
+            try {
+                box2d = await Box2D();
+                console.log('Box2D loaded successfully!');
+                
+                world = new box2d.World(0, 10);
+                
+                createBoundaries();
+                createInitialObjects();
+                
+                document.getElementById('info').textContent = 'Physics playground ready! Click to create objects, try different modes and tools.';
+                
+                gameLoop();
+                
+            } catch (error) {
+                console.error('Failed to load Box2D:', error);
+                document.getElementById('info').textContent = 'Failed to load Box2D: ' + error.message;
+            }
+        }
+        
+        function createBoundaries() {
+            const thickness = 0.5;
+            
+            // Ground
+            const ground = new box2d.Body(world, WORLD_WIDTH/2, WORLD_HEIGHT - thickness/2, box2d.BodyType.staticBody);
+            box2d.ShapeFactory.createBox(ground, WORLD_WIDTH/2, thickness/2, 0.0, 0.5);
+            bodies.push(ground);
+            objectShapes.set(ground, {type: 'box', size: {w: WORLD_WIDTH, h: thickness}, color: '#654321'});
+            
+            // Walls
+            const leftWall = new box2d.Body(world, thickness/2, WORLD_HEIGHT/2, box2d.BodyType.staticBody);
+            box2d.ShapeFactory.createBox(leftWall, thickness/2, WORLD_HEIGHT/2, 0.0, 0.5);
+            bodies.push(leftWall);
+            objectShapes.set(leftWall, {type: 'box', size: {w: thickness, h: WORLD_HEIGHT}, color: '#654321'});
+            
+            const rightWall = new box2d.Body(world, WORLD_WIDTH - thickness/2, WORLD_HEIGHT/2, box2d.BodyType.staticBody);
+            box2d.ShapeFactory.createBox(rightWall, thickness/2, WORLD_HEIGHT/2, 0.0, 0.5);
+            bodies.push(rightWall);
+            objectShapes.set(rightWall, {type: 'box', size: {w: thickness, h: WORLD_HEIGHT}, color: '#654321'});
+        }
+        
+        function createInitialObjects() {
+            // Create some initial objects to demonstrate
+            createShape(5, 3, 'box');
+            createShape(10, 3, 'circle');
+            createShape(15, 3, 'capsule');
+            createShape(20, 3, 'polygon');
+        }
+        
+        function reset() {
+            if (!world) return;
+            
+            // Keep only boundary bodies
+            bodies = bodies.filter(body => {
+                const pos = body.getPosition();
+                const isStatic = body.getType() === box2d.BodyType.staticBody;
+                if (!isStatic) {
+                    objectShapes.delete(body);
+                }
+                return isStatic;
+            });
+            
+            joints = [];
+            rayResults.length = 0;
+            
+            createInitialObjects();
+        }
+        
+        function gameLoop(currentTime = 0) {
+            if (!world) return;
+            
+            // FPS calculation
+            frameCount++;
+            if (currentTime - lastFpsUpdate > 1000) {
+                document.getElementById('fps').textContent = Math.round((frameCount * 1000) / (currentTime - lastFpsUpdate));
+                frameCount = 0;
+                lastFpsUpdate = currentTime;
+            }
+            
+            world.step(1/60, 4);
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Filter invalid objects
+            bodies = bodies.filter(body => body.isValid());
+            joints = joints.filter(joint => joint.isValid());
+            
+            // Update stats
+            document.getElementById('bodyCount').textContent = bodies.length;
+            document.getElementById('jointCount').textContent = joints.length;
+            
+            // Draw bodies
+            bodies.forEach(body => {
+                if (!body.isValid()) return;
+                
+                const pos = body.getPosition();
+                const angle = body.getAngle();
+                const shape = objectShapes.get(body);
+                
+                if (!shape) return;
+                
+                ctx.save();
+                ctx.translate(pos.x * SCALE, pos.y * SCALE);
+                ctx.rotate(angle);
+                
+                ctx.fillStyle = shape.color;
+                ctx.strokeStyle = body.isAwake() ? '#333' : '#666';
+                ctx.lineWidth = body.isAwake() ? 2 : 1;
+                
+                // Draw shape based on type
+                if (shape.type === 'box') {
+                    const w = shape.size.w * SCALE;
+                    const h = shape.size.h * SCALE;
+                    ctx.fillRect(-w/2, -h/2, w, h);
+                    ctx.strokeRect(-w/2, -h/2, w, h);
+                } else if (shape.type === 'circle') {
+                    const r = shape.size.r * SCALE;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, r, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(r * 0.8, 0);
+                    ctx.stroke();
+                } else if (shape.type === 'capsule') {
+                    const h = shape.size.h * SCALE;
+                    const r = shape.size.r * SCALE;
+                    
+                    ctx.fillRect(-r, -h/2, r * 2, h);
+                    ctx.strokeRect(-r, -h/2, r * 2, h);
+                    
+                    ctx.beginPath();
+                    ctx.arc(0, -h/2, r, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                    
+                    ctx.beginPath();
+                    ctx.arc(0, h/2, r, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                } else if (shape.type === 'polygon') {
+                    ctx.beginPath();
+                    const points = shape.size.points;
+                    ctx.moveTo(points[0].x * SCALE, points[0].y * SCALE);
+                    for (let i = 1; i < points.length; i++) {
+                        ctx.lineTo(points[i].x * SCALE, points[i].y * SCALE);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                }
+                
+                ctx.restore();
+            });
+            
+            // Draw ray casting results
+            rayResults.forEach((ray, index) => {
+                const age = Date.now() - ray.time;
+                if (age > 3000) {
+                    rayResults.splice(index, 1);
+                    return;
+                }
+                
+                const alpha = Math.max(0, 1 - age / 3000);
+                ctx.globalAlpha = alpha;
+                
+                ctx.strokeStyle = '#FF4444';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(ray.origin.x * SCALE, ray.origin.y * SCALE);
+                
+                if (ray.result.hit) {
+                    ctx.lineTo(ray.result.point.x * SCALE, ray.result.point.y * SCALE);
+                    ctx.stroke();
+                    
+                    // Hit point
+                    ctx.fillStyle = '#FF0000';
+                    ctx.beginPath();
+                    ctx.arc(ray.result.point.x * SCALE, ray.result.point.y * SCALE, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Normal
+                    ctx.strokeStyle = '#00FF00';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(ray.result.point.x * SCALE, ray.result.point.y * SCALE);
+                    ctx.lineTo(
+                        (ray.result.point.x + ray.result.normal.x * 2) * SCALE,
+                        (ray.result.point.y + ray.result.normal.y * 2) * SCALE
+                    );
+                    ctx.stroke();
+                } else {
+                    ctx.lineTo(
+                        (ray.origin.x + ray.direction.x) * SCALE,
+                        (ray.origin.y + ray.direction.y) * SCALE
+                    );
+                    ctx.stroke();
+                }
+                
+                ctx.globalAlpha = 1;
+            });
+            
+            // Draw current ray while dragging
+            if (isMouseDown && mouseStart && currentMode === 'raycast') {
+                ctx.strokeStyle = '#FF8888';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(mouseStart.x * SCALE, mouseStart.y * SCALE);
+                
+                const rect = canvas.getBoundingClientRect();
+                const currentX = (event ? (event.clientX - rect.left) / SCALE : mouseStart.x);
+                const currentY = (event ? (event.clientY - rect.top) / SCALE : mouseStart.y);
+                
+                ctx.lineTo(currentX * SCALE, currentY * SCALE);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Global functions for buttons
+        window.setMode = setMode;
+        window.toggleGravity = toggleGravity;
+        window.applyExplosion = applyExplosion;
+        window.reset = reset;
+        
+        init();
+    </script>
+</body>
+</html>
