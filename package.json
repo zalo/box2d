@@ -1,0 +1,45 @@
+{
+  "name": "@zalo/box2d",
+  "version": "3.2.0",
+  "description": "Box2D physics engine for JavaScript/WebAssembly",
+  "main": "box2d_bindings.js",
+  "types": "box2d.d.ts",
+  "files": [
+    "box2d_bindings.js",
+    "box2d_bindings.wasm",
+    "box2d.d.ts",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "emcmake cmake -B build -DBOX2D_VALIDATE=OFF -DBOX2D_UNIT_TESTS=OFF -DBOX2D_SAMPLES=OFF -DCMAKE_BUILD_TYPE=Release && emmake make -C build",
+    "test": "node demo/test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zalo/box2d.git"
+  },
+  "keywords": [
+    "physics",
+    "box2d",
+    "webassembly",
+    "emscripten",
+    "game-development",
+    "2d-physics"
+  ],
+  "author": "Erin Catto",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/zalo/box2d/issues"
+  },
+  "homepage": "https://box2d.org",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "exports": {
+    ".": {
+      "import": "./box2d_bindings.js",
+      "require": "./box2d_bindings.js",
+      "types": "./box2d.d.ts"
+    }
+  }
+}

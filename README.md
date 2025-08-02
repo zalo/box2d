@@ -49,7 +49,38 @@ Box2D is a 2D physics engine for games.
 - Run `build.sh` from a bash shell
 - Results are in the build sub-folder
 
-## Building for Xcode
+## Building for Emscripten (Web)
+- Install [Emscripten](https://emscripten.org/docs/getting_started/downloads.html)
+- Run `emcmake cmake -B build -DBOX2D_VALIDATE=OFF -DBOX2D_UNIT_TESTS=OFF -DBOX2D_SAMPLES=OFF -DCMAKE_BUILD_TYPE=Release`
+- Run `emmake make -C build`
+- The JavaScript and WebAssembly bindings will be in `build/bin/`
+
+## JavaScript/WebAssembly Usage
+Box2D can be used in web browsers and Node.js via WebAssembly:
+
+```javascript
+import Box2D from './box2d_bindings.js';
+
+// Initialize Box2D
+const box2d = await Box2D();
+
+// Create a world with gravity
+const world = new box2d.World(0, -10);
+
+// Create a ground body
+const ground = new box2d.Body(world, 0, -10, box2d.BodyType.staticBody);
+box2d.ShapeFactory.createBox(ground, 50, 10);
+
+// Create a dynamic body
+const body = new box2d.Body(world, 0, 4, box2d.BodyType.dynamicBody);
+box2d.ShapeFactory.createBox(body, 1, 1, 1.0, 0.3);
+
+// Run simulation
+world.step(1/60, 4);
+console.log(body.getPosition());
+```
+
+TypeScript definitions are included for full type safety.
 - Install [CMake](https://cmake.org)
 - Add Cmake to the path in .zprofile (the default Terminal shell is zsh)
     - export PATH="/Applications/CMake.app/Contents/bin:$PATH"
@@ -60,7 +91,7 @@ Box2D is a 2D physics engine for games.
 - Select the samples scheme
 - Build and run the samples
 
-## Building and installing
+## Building for Xcode
 - mkdir build
 - cd build
 - cmake ..
