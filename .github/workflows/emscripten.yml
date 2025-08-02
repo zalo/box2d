@@ -1,0 +1,75 @@
+name: Build and Deploy Emscripten Bindings
+
+on:
+  push:
+    branches: [ "main", "copilot/*" ]
+  pull_request:
+    branches: [ "main" ]
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-emscripten:
+    name: Build Emscripten Bindings
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Emscripten
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y emscripten
+        
+    - name: Build Box2D Emscripten Bindings
+      run: |
+        emcmake cmake -B build -DBOX2D_VALIDATE=OFF -DBOX2D_UNIT_TESTS=OFF -DBOX2D_SAMPLES=OFF -DCMAKE_BUILD_TYPE=Release
+        emmake make -C build
+        
+    - name: Prepare Demo
+      run: |
+        mkdir -p dist
+        cp demo/index.html dist/
+        cp build/bin/box2d_bindings.js dist/
+        cp build/bin/box2d_bindings.wasm dist/
+        cp build/bindings/box2d.d.ts dist/
+        
+    - name: Upload Bindings Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: box2d-emscripten-bindings
+        path: |
+          build/bin/box2d_bindings.js
+          build/bin/box2d_bindings.wasm
+          build/bindings/box2d.d.ts
+          
+    - name: Setup Pages
+      uses: actions/configure-pages@v4
+      
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        # Upload the demo
+        path: 'dist'
+        
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build-emscripten
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

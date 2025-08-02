@@ -8,3 +8,9 @@ settings.ini
 CMakeUserPresets.json
 .cache/
 .idea/
+
+# Emscripten bindings build artifacts
+*.js
+*.wasm
+node_modules/
+dist/

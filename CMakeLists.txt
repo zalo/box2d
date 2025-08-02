@@ -132,6 +132,11 @@ if(PROJECT_IS_TOP_LEVEL)
 	if(BOX2D_DOCS)
 		add_subdirectory(docs)
 	endif()
+	
+	# Add Emscripten bindings
+	if(EMSCRIPTEN)
+		add_subdirectory(bindings)
+	endif()
 endif()
 
 # # Building on clang in windows
