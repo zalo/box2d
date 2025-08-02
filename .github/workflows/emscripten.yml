@@ -40,6 +40,8 @@ jobs:
       run: |
         mkdir -p dist
         cp demo/index.html dist/
+        cp demo/playground.html dist/
+        cp demo/joints_demo.html dist/
         cp build/bin/box2d_bindings.js dist/
         cp build/bin/box2d_bindings.wasm dist/
         cp build/bindings/box2d.d.ts dist/
